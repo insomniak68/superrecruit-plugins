@@ -4,7 +4,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from superrecruit import (
+from narrowfield import (
     PluginInfo,
     JobImport,
     CandidateImport,

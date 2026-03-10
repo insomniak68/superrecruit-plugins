@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from superrecruit import (
+from narrowfield import (
     PluginInfo,
     ScreeningDecision,
 )

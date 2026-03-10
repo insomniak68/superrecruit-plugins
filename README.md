@@ -1,8 +1,8 @@
-# SuperRecruit Plugins
+# Narrowfield Plugins
 
-Community and reference plugins for [SuperRecruit](https://github.com/insomniak68/superrecruit-desktop).
+Community and reference plugins for [Narrowfield](https://github.com/insomniak68/narrowfield).
 
-Built on the [SuperRecruit SDK](https://github.com/insomniak68/superrecruit-sdk).
+Built on the [Narrowfield SDK](https://github.com/insomniak68/narrowfield-sdk).
 
 ## Available Plugins
 
@@ -21,12 +21,12 @@ pip install ./plugins/sr-csv
 pip install ./plugins/sr-webhook
 
 # Or install directly from GitHub
-pip install "sr-csv @ git+https://github.com/insomniak68/superrecruit-plugins.git#subdirectory=plugins/sr-csv"
+pip install "sr-csv @ git+https://github.com/insomniak68/narrowfield-plugins.git#subdirectory=plugins/sr-csv"
 ```
 
 ## Usage
 
-Register in SuperRecruit's `config/plugins.yaml`:
+Register in Narrowfield's `config/plugins.yaml`:
 
 ```yaml
 plugins:
@@ -49,9 +49,9 @@ Or drop the plugin directory into SR's `plugins/` folder for auto-discovery.
 
 ## Writing Your Own Plugin
 
-1. `pip install superrecruit-sdk`
+1. `pip install narrowfield-sdk`
 2. Implement `SourcePlugin` and/or `SinkPlugin`
-3. See the [Plugin Spec](https://github.com/insomniak68/superrecruit-sdk/blob/main/docs/PLUGIN_SPEC.md) for full reference
+3. See the [Plugin Spec](https://github.com/insomniak68/narrowfield-sdk/blob/main/docs/PLUGIN_SPEC.md) for full reference
 4. Submit a PR to add it here!
 
 ## License

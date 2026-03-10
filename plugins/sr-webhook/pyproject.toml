@@ -5,10 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "sr-webhook"
 version = "0.1.0"
-description = "Webhook sink plugin for SuperRecruit"
+description = "Webhook sink plugin for Narrowfield"
 license = "MIT"
 requires-python = ">=3.10"
-dependencies = ["superrecruit-sdk>=0.1.0", "httpx>=0.24"]
+dependencies = ["narrowfield-sdk>=0.1.0", "httpx>=0.24"]
 
 [project.urls]
-Homepage = "https://github.com/insomniak68/superrecruit-plugins"
+Homepage = "https://github.com/insomniak68/narrowfield-plugins"

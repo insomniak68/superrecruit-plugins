@@ -5,10 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "sr-csv"
 version = "0.1.0"
-description = "CSV source plugin for SuperRecruit"
+description = "CSV source plugin for Narrowfield"
 license = "MIT"
 requires-python = ">=3.10"
-dependencies = ["superrecruit-sdk>=0.1.0"]
+dependencies = ["narrowfield-sdk>=0.1.0"]
 
 [project.urls]
-Homepage = "https://github.com/insomniak68/superrecruit-plugins"
+Homepage = "https://github.com/insomniak68/narrowfield-plugins"
