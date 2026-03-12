@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sr-eightfold"
+version = "0.1.1"
+description = "Eightfold AI source plugin for Narrowfield — fetch positions and applicants from CareerHub"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["narrowfield-sdk>=0.1.0", "httpx>=0.24"]
+
+[project.urls]
+Homepage = "https://github.com/insomniak68/narrowfield-plugins"

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sr-api"
+version = "0.1.0"
+description = "REST API source plugin for Narrowfield — fetch candidates and jobs from any API"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["narrowfield-sdk>=0.1.0", "httpx>=0.24"]
+
+[project.urls]
+Homepage = "https://github.com/insomniak68/narrowfield-plugins"
