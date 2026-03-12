@@ -19,6 +19,7 @@ Data flow:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -76,6 +77,7 @@ class Plugin:
 
         # Options
         self.enrich_profiles: bool = True
+        self.download_resumes: bool = True
         self.feedback_status: str = "REQUESTED"
         self.timeout: float = 30.0
 
@@ -87,7 +89,7 @@ class Plugin:
         return PluginInfo(
             name="eightfold",
             display_name="Eightfold AI / CareerHub",
-            version="0.1.1",
+            version="0.1.5",
             description="Fetch positions and applicants from Eightfold AI (CareerHub)",
             capabilities=["source:jobs", "source:candidates"],
         )
@@ -95,6 +97,9 @@ class Plugin:
     # ── configuration ─────────────────────────────────────────────
 
     def configure(self, config: dict[str, Any]) -> None:
+        # Invalidate cached client so new credentials take effect
+        self._client = None
+
         self.base_url = config.get("base_url", _DEFAULT_BASE_URL).rstrip("/")
         self.domain = config.get("domain", "microsoft.eightfold.ai")
 
@@ -115,6 +120,7 @@ class Plugin:
 
         # Options
         self.enrich_profiles = config.get("enrich_profiles", True)
+        self.download_resumes = config.get("download_resumes", True)
         self.feedback_status = config.get("feedback_status", "REQUESTED")
         self.timeout = float(config.get("timeout", 30))
 
@@ -127,6 +133,14 @@ class Plugin:
                 f"{self.base_url}/api/feedback/boot",
                 params={"view": "interviewer", "status": self.feedback_status},
             )
+            if resp.status_code == 500:
+                return {
+                    "ok": False,
+                    "message": (
+                        "CareerHub returned 500 — your session cookies have "
+                        "likely expired. Refresh them from DevTools."
+                    ),
+                }
             if resp.status_code < 400:
                 body = resp.json()
                 count = body.get("feedback_count", {}).get("interviewer", {})
@@ -265,7 +279,16 @@ class Plugin:
         more = custom_info.get("moreCandidate", {}).get("dataFields", {})
         personal_email = more.get("custPersonalemail")
         if personal_email:
-            candidate.email = personal_email
+            if isinstance(personal_email, list):
+                personal_email = personal_email[0] if personal_email else ""
+            candidate.email = str(personal_email)
+
+        # Resume download
+        if self.download_resumes:
+            pdf_bytes, pdf_filename = self._download_resume(enc_id)
+            if pdf_bytes:
+                candidate.resume_bytes = pdf_bytes
+                candidate.resume_filename = pdf_filename
 
         # Profile URL
         candidate.external_url = f"https://{self.domain}/profile/{enc_id}"
@@ -301,6 +324,77 @@ class Plugin:
 
         return candidate
 
+    def _download_resume(self, enc_id: str) -> tuple[bytes, str]:
+        """Download a candidate's resume PDF from CareerHub.
+
+        Fetches the resume page HTML, parses the embedded iframe src to find
+        the actual PDF URL, then downloads the PDF bytes.
+
+        Returns (pdf_bytes, filename) or (b"", "") on failure.
+        """
+        try:
+            client = self._build_client()
+            # Fetch resume page HTML
+            resp = client.get(
+                f"{self.base_url}/profile/{enc_id}/resume",
+                params={
+                    "anon": "0",
+                    "feedback_view": "true",
+                    "profile_v2_view": "true",
+                    "hide_download_options": "false",
+                },
+                headers={"Accept": "text/html,application/xhtml+xml,*/*"},
+            )
+            if resp.status_code >= 400:
+                log.debug("Resume page returned %d for %s", resp.status_code, enc_id)
+                return b"", ""
+
+            html = resp.text
+
+            # Parse iframe src — the resume is embedded as:
+            #   <iframe src="/profile/{enc_id}?export=ats/.../attachments/{file}&amp;inline=true&amp;group_id=...">
+            match = re.search(r'<iframe[^>]+src="([^"]+)"', html, re.IGNORECASE)
+            if not match:
+                log.debug("No iframe found in resume page for %s", enc_id)
+                return b"", ""
+
+            iframe_src = match.group(1)
+            # Decode HTML entities (&amp; → &)
+            iframe_src = iframe_src.replace("&amp;", "&")
+
+            # Extract filename from the export parameter
+            filename_match = re.search(r'attachments/([^&"]+)', iframe_src)
+            filename = filename_match.group(1) if filename_match else f"{enc_id}.bin"
+
+            # Build absolute URL if relative
+            if iframe_src.startswith("/"):
+                pdf_url = f"{self.base_url}{iframe_src}"
+            else:
+                pdf_url = iframe_src
+
+            # Download the resume (may be PDF, DOCX, or DOC)
+            doc_resp = client.get(
+                pdf_url,
+                headers={"Accept": "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,*/*"},
+                timeout=60.0,
+            )
+            if doc_resp.status_code >= 400:
+                log.debug("Resume download returned %d for %s", doc_resp.status_code, enc_id)
+                return b"", ""
+
+            content_type = doc_resp.headers.get("content-type", "")
+            known_types = ("pdf", "word", "msword", "officedocument", "octet-stream")
+            if not any(t in content_type for t in known_types) and len(doc_resp.content) < 100:
+                log.debug("Resume response doesn't look like a document for %s (type=%s)", enc_id, content_type)
+                return b"", ""
+
+            log.info("Downloaded resume for %s (%d bytes, type=%s)", enc_id, len(doc_resp.content), content_type)
+            return doc_resp.content, filename
+
+        except Exception as exc:
+            log.warning("Error downloading resume for %s: %s", enc_id, exc)
+            return b"", ""
+
     # ── fetch skills (not applicable) ─────────────────────────────
 
     def fetch_skills(self) -> list[SkillDefinition]:
@@ -319,6 +413,18 @@ class Plugin:
                 "sort_by": "profile_feedback.requested_timestamp desc",
             },
         )
+        if resp.status_code == 500:
+            raise PluginError(
+                "CareerHub returned 500 — your session cookies have likely expired. "
+                "Log in to CareerHub in your browser, open DevTools → Application → "
+                "Cookies, and copy fresh 'session' and 'remember_token' values into "
+                "plugins.yaml, then restart."
+            )
+        if resp.status_code in (401, 403):
+            raise PluginError(
+                f"CareerHub returned {resp.status_code} — authentication failed. "
+                "Please refresh your cookies in plugins.yaml."
+            )
         resp.raise_for_status()
         body = resp.json()
         return body.get("feedback_data", [])
@@ -330,7 +436,15 @@ class Plugin:
         if self._client is not None:
             return self._client
 
-        headers: dict[str, str] = {"Accept": "application/json"}
+        headers: dict[str, str] = {
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+            ),
+            "Referer": f"{self.base_url}/",
+        }
         cookies: dict[str, str] = {}
 
         if self.auth_mode == "cookie":
